@@ -1,0 +1,204 @@
+---
+title: "Basic Forecasting Using VAR and ARIMA Models"
+author: "Natalie Walker"
+date: "5/30/2022"
+output: html_document
+---
+```{r}
+knitr::opts_chunk$set(
+  echo = TRUE, ## Show all R output
+  cache = FALSE, ## Cache the results to increase performance.
+  message = FALSE, ## Suppress messages (e.g. about namespace conflicts)
+  warning = FALSE ## Suppress warnings
+  ) 
+knitr::opts_chunk$set(cache=TRUE) 
+```
+
+```{r libs, cache=FALSE}
+## Install the pacman package if necessary
+if (!require("pacman")) install.packages("pacman")
+## Install other packages using pacman::p_load()
+pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
+```
+
+# Load in data
+
+```{r}
+# load in data with fredr
+# overall employment
+emp = fredr(
+  series_id = "PAYEMS",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2021-12-01")
+)
+
+# temporary help
+temphelp = fredr(
+  series_id = "TEMPHELPS",
+   observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2021-12-01")
+)
+```
+
+# Create `ts` objects 
+
+```{r}
+# create an overall employment time series object
+emp1 = emp |>
+  subset(select = c(date, value)) # select only necessary variables
+
+emp1 = ts(emp1[,2], # select the value column
+          start = c(1990,1),  # set start of the series 
+          end = c(2017,12),
+          frequency = 12) # data is released every month
+
+# create an temphelps time series object
+temphelp1 = temphelp |>
+  subset(select = c(date, value)) # select only necessary variables
+
+temphelp1 = ts(temphelp1[,2], # select the value column
+          start = c(1990,1),  # set start of the series 
+          end = c(2017,12),
+          frequency = 12) # data is released every month
+```
+# Examine series
+
+# Test for unit root and transform
+
+```{r}
+# augmented dickey-fuller cointegration test
+ndiffs(temphelp1, test = 'adf')
+ndiffs(emp1, test = 'adf')
+
+# tranform series by taking the first-difference
+diff_temphelp1= diff(temphelp1)
+diff_emp1 = diff(emp1)
+```
+
+# Select Number of Lags and estimate model for forecasting
+
+```{r}
+# create one dataframe with both series to estimate models on
+temp_emp = cbind(emp1, temphelp1)
+colnames(temp_emp) = c("emp1", "temphelp1")
+
+# select lag length
+lagselect = VARselect(temp_emp, lag.max = 10, type = "trend")
+lagselect$selection
+
+# estimate model 
+mod1 = VAR(temp_emp, p = 8, type = "trend")
+summary(mod1)
+```
+
+# Check model 
+
+```{r}
+# ensure no time dependence in residuals
+serial.test(mod1, lags.pt = 8, type = "BG")
+
+# ensure stability
+plot(stability(mod1, type = "OLS-CUSUM"))
+roots(mod1, modulus = TRUE)
+
+# ensure normally distributed residuals 
+normality.test(mod1, multivariate.only = TRUE)
+```
+
+# Granger causality
+
+```{r}
+# use  model to understand Granger Causality
+causality(mod1, cause = "emp1")
+causality(mod1, cause = "temphelp1")
+```
+During the period of the Great Inflation, housing starts Granger cause manufacturing capacity, and manufacturing capacity Granger causes housing starts if we reject the null hypothesis at the 10% level.
+
+# Impulse response functions
+
+```{r}
+a = irf(mod1, impulse = "emp1", response = "emp1", n.ahead = 20, boot = TRUE)
+plot(a, ylab = "Employment", main = "EMP's shock to EMP")
+
+b = irf(mod1, impulse = "emp1", response = "temphelp1", n.ahead = 20, boot = TRUE)
+plot(b, ylab = "TEMPHELPS", main = "EMP's shock to TEMPHELPS")
+
+c = irf(mod1, impulse = "temphelp1", response = "emp1", n.ahead = 20, boot = TRUE)
+plot(c, ylab = "Employment", main = "TEMPHELPS's shock to EMP")
+
+d = irf(mod1, impulse = "temphelp1", response = "temphelp1", n.ahead = 20, boot = TRUE)
+plot(d, ylab = "Employment", main = "TEMPHELPS's shock to TEMPHELPS")
+
+ggarrange(a, b, c, d)
+```
+
+# Forecast 
+
+```{r}
+varfst = forecast(mod1, h = 51)
+autoplot(varfst)
+# overlay actual values with forecasted values
+# create an overall employment time series object
+emp2 = emp |>
+  subset(select = c(date, value)) # select only necessary variables
+
+emp2 = ts(emp2[,2], # select the value column
+          start = c(1990,1),  # set start of the series 
+          end = c(2022,1),
+          frequency = 12) # data is released every month
+
+# create an temphelps time series object
+temphelp2 = temphelp |>
+  subset(select = c(date, value)) # select only necessary variables
+
+temphelp2 = ts(temphelp2[,2], # select the value column
+          start = c(1990,1),  # set start of the series 
+          end = c(2022,1),
+          frequency = 12) # data is released every month
+
+autoplot(varfst[["forecast"]][["emp1"]]) + autolayer(emp2)
+autoplot(varfst[["forecast"]][["temphelp1"]]) + autolayer(temphelp2)
+```
+
+##### ARIMA
+
+```{r}
+# load in ORNA series
+orna = fredr(
+  series_id = "ORNA",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
+)
+
+# create an orna time series object
+orna1 = orna |>
+  subset(select = c(date, value)) # select only necessary variables
+
+orna1 = ts(orna1[,2], # select the value column
+          start = c(1990,1),  # set start of the series January 2000
+          end = c(2022,4 ),
+          frequency = 12) # data is released every month
+```
+
+### check unit roots
+
+```{r}
+ndiffs(orna1, test = "adf")
+Box.test(diff(orna1), lag = 10, type = "Ljung-Box")
+orna1 |> diff() |> ggtsdisplay(main="First-Difference of ORNA Series and Autocorrelations")
+```
+
+## create arima model
+
+```{r}
+arima = auto.arima(orna1, d = 1)
+checkresiduals(arima)
+```
+
+## forecast
+
+```{r}
+arimafst = forecast(arima, h = 24)
+autoplot(arimafst)
+```
+
