@@ -4,7 +4,11 @@ author: "Natalie Walker"
 date: "5/30/2022"
 output: html_document
 ---
-```{r}
+| In this post, I show the basic steps in R for creating Vector Autoregressive (VAR) and Autoregressive Integrated Moving Average (ARIMA) models, and forecasting those models. I will skip over the math for this post but understand that these models and subsequent forecasting includes complexities that you should grasp before making decisions based on the results of these models. You can read about the art of forecasting, including a lot more math, (here)[https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf] and (here)[https://otexts.com/fpp2/VAR.html]. Special thanks to Professor Timothy Duy for showing me some of these resources and providing the foundation for this example.
+
+SOURCE: https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06
+
+```{r, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE, ## Show all R output
   cache = FALSE, ## Cache the results to increase performance.
@@ -13,7 +17,9 @@ knitr::opts_chunk$set(
   ) 
 knitr::opts_chunk$set(cache=TRUE) 
 ```
+# VAR Model & Forecast
 
+### Load in packages
 ```{r libs, cache=FALSE}
 ## Install the pacman package if necessary
 if (!require("pacman")) install.packages("pacman")
@@ -21,7 +27,13 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
 ```
 
-# Load in data
+### Load in data
+| - You will need to obtain an API key through (FRED)[https://fred.stlouisfed.org/docs/api/api_key.html].
+| - Set your API key in your .Renviron by calling `usethis::edit_r_environ()` and then adding FRED_API_KEY="your-api-key"
+| - Call `readRenviron("~/.Renviron")` or restart your R session to activate the API key
+| - Alternatively, call `fredr_set_key("your-api-key")`, but this will only set it for your current session
+| - Use `fredr` package to dictate which series you would like to load in. Today, we will use the series for temporary employees and overall employment in the United States.
+| **Note: I am choosing to load in the data for 1990 to the most recent data. We can choose a subset of this to estimate our model over and then forecast over "known" periods.**
 
 ```{r}
 # load in data with fredr
@@ -29,19 +41,30 @@ pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
 emp = fredr(
   series_id = "PAYEMS",
   observation_start = as.Date("1990-01-01"),
-  observation_end = as.Date("2021-12-01")
+  observation_end = as.Date("2022-4-01")
 )
 
 # temporary help
 temphelp = fredr(
   series_id = "TEMPHELPS",
    observation_start = as.Date("1990-01-01"),
-  observation_end = as.Date("2021-12-01")
+  observation_end = as.Date("2022-4-01")
+)
+
+# recession data 
+rec = fredr(
+  series_id = "USRECM",
+   observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
 )
 ```
 
-# Create `ts` objects 
+### Create `ts` objects 
 
+| - To be able to create ARIMA and VAR models, R has to recognize these series as time series objects. We use the `ts()` function that is part of the `stats` packge to do this. 
+| - I think creating a new data frame from the original FRED data frame that we created in the previous make modifying the date ranges for your models easier, if need be. I have created `emp1` and will turn `emp1` into a ts object by setting the start and end dates mannually because I do not want estimate my VAR model over the entire series length. If you did not set start and end, then `ts()` defaults to the whole series.
+| - Setting `frequency` should be specified. This is monthly data so I have set it to 12.
+| - I am estimating the VAR model over the period January 1990 to December 2017 for simplicity in this example.
 ```{r}
 # create an overall employment time series object
 emp1 = emp |>
@@ -61,9 +84,60 @@ temphelp1 = ts(temphelp1[,2], # select the value column
           end = c(2017,12),
           frequency = 12) # data is released every month
 ```
-# Examine series
+### Examine series
+
+| - A necessary part of forecasting and creating AR models is to examine the series of interest. Today, I will compare the built-in functionality of `autoplot` with `ggplot`
+
+```{r}
+# autoplot ONLY USE WITH TS OBJECTS
+autoplot(emp1)
+autoplot(temphelp1)
+
+# ggplot version USE ORIGINAL DATAFRAME
+
+min <- as.Date("1990-01-01")
+max <- as.Date("2022-04-01")
+g_emp = ggplot(data = emp) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "Employees (000s)", x= "Time", title = "Total Nonfarm Employment", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  geom_rect(aes(xmin = as.Date("1990-07-01"), xmax = as.Date("1991-03-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+  geom_rect(aes(xmin = as.Date("2001-03-01"), xmax = as.Date("2001-11-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+  geom_rect(aes(xmin = as.Date("2007-12-01"), xmax = as.Date("2009-06-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+   geom_rect(aes(xmin = as.Date("2020-02-01"), xmax = as.Date("2020-04-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) 
+
+g_temp = ggplot(data = temphelp) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "", x= "Time", title = "Temporary Employment", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  geom_rect(aes(xmin = as.Date("1990-07-01"), xmax = as.Date("1991-03-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+  geom_rect(aes(xmin = as.Date("2001-03-01"), xmax = as.Date("2001-11-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+  geom_rect(aes(xmin = as.Date("2007-12-01"), xmax = as.Date("2009-06-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) +
+   geom_rect(aes(xmin = as.Date("2020-02-01"), xmax = as.Date("2020-04-01"), ymin=-Inf, ymax=+Inf), 
+            fill = 'lightpink', alpha = 0.01) 
+
+ggarrange(g_emp, g_temp)
+
+```
+
+Temporary employment peaks before a recession while overall employment peaks during a recession which indicates that a decrease in temporary employment could be a signal that a recession is arriving. 
 
 # Test for unit root and transform
+
+| An important part of understanding the dynamics of a time series is knowing whether or not it has a unit root (sometimes referred to as cointegration). I suggest you read the chapter dedicated to unit roots in the book I linked or here's a (brief intro)[https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf]. 
+| I will use an Augmented Dickey-Fuller test to determine the level of cointegration coupled with the `ndiffs()` function that automatically shows you the level of cointegration in the series. The null hypothesis for the ADF test is that non-stationarity exists, i.e. the series has a unit root. 
+| The `diff()` can be implemented to eliminate the unit root. 
+| Then, I perform another ADF test on the first-differenced data. Overall employment still shows non-stationarity, as evidenced by accepting the null hypothesis. 
+| Additionally, I wanted to examine the degree of autocorrelation in the differenced series using the Ljung–Box test. 
 
 ```{r}
 # augmented dickey-fuller cointegration test
@@ -71,12 +145,24 @@ ndiffs(temphelp1, test = 'adf')
 ndiffs(emp1, test = 'adf')
 
 # tranform series by taking the first-difference
-diff_temphelp1= diff(temphelp1)
+diff_temphelp1 = diff(temphelp1)
 diff_emp1 = diff(emp1)
+
+# check to ensure that the unit root is no longer there 
+adf.test(diff_temphelp1)
+adf.test(diff_emp1)
+
+# look at patterns of non-stationarity
+Box.test(diff_emp1, lag = 10, type = "Ljung-Box")
+Box.test(diff_temphelp1, lag = 10, type = "Ljung-Box")
 ```
 
-# Select Number of Lags and estimate model for forecasting
+### Select number of lags and estimate model
 
+| Here, I will use the TEMPHELPS and PAYEMS in levels rather than the differenced data. You can run VAR and ARIMA models using differenced data but you have to return it to levels after forecasting for any interpretability. Here's a (good resource)[https://www.r-bloggers.com/2021/11/vector-autoregressive-model-var-using-r/] on how to do that.
+| You have to create a matrix of the time series objects to run the lag selection procedure and model estimation.
+| There are many ways of selecting the number of lags in a model, including just looking at the ACF and PACF, but here I will choose whatever the AIC selects from the `VARselect()` function in the `vars` package. I specify that the selection and model estimation should be on a "trend" because both temporary and overall employment are increasing on a trend.
+| Then, I estimate the model using `VAR()`, also in the `vars` package.
 ```{r}
 # create one dataframe with both series to estimate models on
 temp_emp = cbind(emp1, temphelp1)
@@ -91,7 +177,10 @@ mod1 = VAR(temp_emp, p = 8, type = "trend")
 summary(mod1)
 ```
 
-# Check model 
+### Statistical checks on the model 
+| Run a Breush-Godfrey test to ensure that we have eliminated any autocorrelation in the residuals. In this case, we accept the null hypothesis of no serial correlation because the p-value > 0.05
+| Ensure that the model is stable (again, go read about this if you are unsure). I plotted the results from the stability test as well as used the `roots()` function from `vars`. It appears that our model is not stable. This is not good, but I will continue forward for this example. 
+| The Jacques-Bera test shows whether or not the residuals come from a normal distribution. In this case we reject the null hypothesis of noraml distribution -- not the end of the world but has some consequences. 
 
 ```{r}
 # ensure no time dependence in residuals
@@ -105,16 +194,21 @@ roots(mod1, modulus = TRUE)
 normality.test(mod1, multivariate.only = TRUE)
 ```
 
-# Granger causality
+### Granger causality
+
+| Granger causality basically tells us which variable contains information about the other variable with time as dimension. This type of test (an F-test) can be very useful in policymaking because you can use one variable as a 'signal' for another variable. 
+| The `causality()` function in `vars` does this for us. X causes Y if the p-value < 0.05
+| In our case, overal employment Granger causes temporary employment, and temporary employment Granger causes overall employment over our model time period (1990-2017)
 
 ```{r}
 # use  model to understand Granger Causality
 causality(mod1, cause = "emp1")
 causality(mod1, cause = "temphelp1")
 ```
-During the period of the Great Inflation, housing starts Granger cause manufacturing capacity, and manufacturing capacity Granger causes housing starts if we reject the null hypothesis at the 10% level.
 
-# Impulse response functions
+### Impulse response functions
+
+| We should also look at the impulse response functions to better understand the degree of impact that a shock has 
 
 ```{r}
 a = irf(mod1, impulse = "emp1", response = "emp1", n.ahead = 20, boot = TRUE)
@@ -193,6 +287,8 @@ orna1 |> diff() |> ggtsdisplay(main="First-Difference of ORNA Series and Autocor
 ```{r}
 arima = auto.arima(orna1, d = 1)
 checkresiduals(arima)
+
+# manual arima 
 ```
 
 ## forecast

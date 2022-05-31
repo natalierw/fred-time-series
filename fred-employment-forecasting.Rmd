@@ -92,7 +92,7 @@ g_fed = ggplot(data = fedfunds ) +
   theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
  geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
 
-g_unemp = ggplot(data = orur ) + 
+g_unemp = ggplot(data = orur) + 
   geom_line(aes(x = date, y = value)) + 
   scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
   labs(y = "Unemployment Rate (%)", x= "Time", title = "Oregon's Unemployment Rate", subtitle = "January 1990 - April 2022") +
