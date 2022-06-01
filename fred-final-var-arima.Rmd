@@ -2,7 +2,10 @@
 title: "Basic Forecasting Using VAR and ARIMA Models"
 author: "Natalie Walker"
 date: "5/30/2022"
-output: html_document
+output: 
+  html_document: default
+  md_document: default
+
 ---
 | In this post, I show the basic steps in R for creating Vector Autoregressive (VAR) and Autoregressive Integrated Moving Average (ARIMA) models, and forecasting those models. I will skip over the math for this post but understand that these models and subsequent forecasting includes complexities that you should grasp before making decisions based on the results of these models. You can read about the art of forecasting, including a lot more math, (here)[https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf] and (here)[https://otexts.com/fpp2/VAR.html]. Special thanks to Professor Timothy Duy for showing me some of these resources and providing the foundation for this example.
 
@@ -92,6 +95,10 @@ temphelp1 = ts(temphelp1[,2], # select the value column
 # autoplot ONLY USE WITH TS OBJECTS
 autoplot(emp1)
 autoplot(temphelp1)
+```
+
+Those graphs are okay... but let's up the ante a bit with `ggplto2`.
+```{r}
 
 # ggplot version USE ORIGINAL DATAFRAME
 
@@ -139,7 +146,7 @@ Temporary employment peaks before a recession while overall employment peaks dur
 | Then, I perform another ADF test on the first-differenced data. Overall employment still shows non-stationarity, as evidenced by accepting the null hypothesis. 
 | Additionally, I wanted to examine the degree of autocorrelation in the differenced series using the Ljung–Box test. 
 
-```{r}
+```{r, warning = FALSE}
 # augmented dickey-fuller cointegration test
 ndiffs(temphelp1, test = 'adf')
 ndiffs(emp1, test = 'adf')
@@ -178,6 +185,7 @@ summary(mod1)
 ```
 
 ### Statistical checks on the model 
+
 | Run a Breush-Godfrey test to ensure that we have eliminated any autocorrelation in the residuals. In this case, we accept the null hypothesis of no serial correlation because the p-value > 0.05
 | Ensure that the model is stable (again, go read about this if you are unsure). I plotted the results from the stability test as well as used the `roots()` function from `vars`. It appears that our model is not stable. This is not good, but I will continue forward for this example. 
 | The Jacques-Bera test shows whether or not the residuals come from a normal distribution. In this case we reject the null hypothesis of noraml distribution -- not the end of the world but has some consequences. 
@@ -185,11 +193,15 @@ summary(mod1)
 ```{r}
 # ensure no time dependence in residuals
 serial.test(mod1, lags.pt = 8, type = "BG")
+```
 
+```{r}
 # ensure stability
 plot(stability(mod1, type = "OLS-CUSUM"))
 roots(mod1, modulus = TRUE)
+```
 
+```{r}
 # ensure normally distributed residuals 
 normality.test(mod1, multivariate.only = TRUE)
 ```
@@ -208,28 +220,33 @@ causality(mod1, cause = "temphelp1")
 
 ### Impulse response functions
 
-| We should also look at the impulse response functions to better understand the degree of impact that a shock has 
+| We should also look at the impulse response functions to better understand the degree of impact that a shock to one variable has on the other. 
+| I chose `n.ahed = 24` to look at the dynamics of a shock 2 years after it hits
 
-```{r}
-a = irf(mod1, impulse = "emp1", response = "emp1", n.ahead = 20, boot = TRUE)
+```{r, warning = FALSE}
+a = irf(mod1, impulse = "emp1", response = "emp1", n.ahead = 24, boot = TRUE)
 plot(a, ylab = "Employment", main = "EMP's shock to EMP")
 
-b = irf(mod1, impulse = "emp1", response = "temphelp1", n.ahead = 20, boot = TRUE)
+b = irf(mod1, impulse = "emp1", response = "temphelp1", n.ahead = 24, boot = TRUE)
 plot(b, ylab = "TEMPHELPS", main = "EMP's shock to TEMPHELPS")
 
-c = irf(mod1, impulse = "temphelp1", response = "emp1", n.ahead = 20, boot = TRUE)
+c = irf(mod1, impulse = "temphelp1", response = "emp1", n.ahead = 24, boot = TRUE)
 plot(c, ylab = "Employment", main = "TEMPHELPS's shock to EMP")
 
-d = irf(mod1, impulse = "temphelp1", response = "temphelp1", n.ahead = 20, boot = TRUE)
+d = irf(mod1, impulse = "temphelp1", response = "temphelp1", n.ahead = 24, boot = TRUE)
 plot(d, ylab = "Employment", main = "TEMPHELPS's shock to TEMPHELPS")
-
-ggarrange(a, b, c, d)
 ```
 
-# Forecast 
+A shock to PAYEMS causes  a persistent increase in PAYEMS and TEMPHELPS, and a shock to TEMPHELPS causes a persistent shock to PAYEMS  and TEMPHELPS. This shows the unit root dynamic in both of these series and the business cycle dynamics. These IRFs show evidence that a shock to temporary hires signals that overall employment will be shocked as well. 
 
+### Forecast 
+
+| Use the `forecast()` function on the model created in the previous step and set your forecast horizon. Here I set the horizon to `h=52` because I want to forecast out to April 2022.
+| I use `autoplot()` here for simplicity. Examine the object that the `forecast()` function creates -- it is a list so you have to use "[[]]" notation to extract the relevant information.
+| To compare the forecasted values with the actual series, I have created new series called `temphelp2` and `emp2` that contain data up to April 2022. Then, I add them to the graph by using `autolayer()`
 ```{r}
-varfst = forecast(mod1, h = 51)
+
+varfst = forecast(mod1, h = 52)
 autoplot(varfst)
 # overlay actual values with forecasted values
 # create an overall employment time series object
@@ -238,7 +255,7 @@ emp2 = emp |>
 
 emp2 = ts(emp2[,2], # select the value column
           start = c(1990,1),  # set start of the series 
-          end = c(2022,1),
+          end = c(2022,4),
           frequency = 12) # data is released every month
 
 # create an temphelps time series object
@@ -247,15 +264,20 @@ temphelp2 = temphelp |>
 
 temphelp2 = ts(temphelp2[,2], # select the value column
           start = c(1990,1),  # set start of the series 
-          end = c(2022,1),
+          end = c(2022,4),
           frequency = 12) # data is released every month
 
 autoplot(varfst[["forecast"]][["emp1"]]) + autolayer(emp2)
 autoplot(varfst[["forecast"]][["temphelp1"]]) + autolayer(temphelp2)
 ```
 
-##### ARIMA
+# ARIMA Model & Forecast
 
+| Another common forecasting model is the ARIMA model. Here I use an ARIMA model to forecast Oregon's employment levels into 2024.
+
+### Load in data and transform
+
+| Following the same proceduare as before, I load in all the relevant data and then create the `ts()` subsetted to the timeframe I want to use to build the model. Because I am forecasting over an unknown time period, June 2022 to April 2024, I use all the data loaded to run my model.
 ```{r}
 # load in ORNA series
 orna = fredr(
@@ -274,27 +296,46 @@ orna1 = ts(orna1[,2], # select the value column
           frequency = 12) # data is released every month
 ```
 
-### check unit roots
+### Check unit roots
+
+| The "I" in ARIMA stands for "integrated" so the whole point of creating an ARIMA model is to leverage the unit root of the data in the creation of the forecast. 
+|  To check for a unit root, I follow the same procedure as above: `ndiffs()` with an ADF test. 
+| Then, I examine the autocorrelation in the first-differenced data and plot the first-differenced data using `ggtdisplay()`
 
 ```{r}
 ndiffs(orna1, test = "adf")
 Box.test(diff(orna1), lag = 10, type = "Ljung-Box")
 orna1 |> diff() |> ggtsdisplay(main="First-Difference of ORNA Series and Autocorrelations")
 ```
+The p-value > 0.05 for the Ljung-Box test shows that the series does not exhibit autocorrelations. However, we could reject the null hypothesis at the 10% level, I decided to look at the ACF and PACF for the series which shows some autocorrelation. This is likely due to the dynamics during the pandemic but because it is not highly statistically significant, we will stick to using the first-differenced data, rather than using two lags. 
+### Create an ARIMA model
 
-## create arima model
+| The `forecast` packages comes with an easy function `auto.arima()`. There is a manual ARIMA function: `Arima()` if you want to set your own (p,d,q) -- it is also part of the `forecast` package.
+| With `auto.arima()`, you set the level of cointegration using `d = 1`. `auto.arima()` chose an ARIMA(0,1,2) model based on the model that minimized the AIC criteria.
+| Then, I check the residuals for autocorrelation and whether the residuals come from a normal distribution.
 
 ```{r}
 arima = auto.arima(orna1, d = 1)
 checkresiduals(arima)
-
-# manual arima 
 ```
+The residuals do not exhibit autocorrelation and they appear to be relatively normally distributed.
 
-## forecast
-
+### Forecast
+| Use the `forecast()` function again to forecast out two years of employment. 
+| I use `autoplot()` for simplicity again. 
 ```{r}
 arimafst = forecast(arima, h = 24)
 autoplot(arimafst)
 ```
+# Conclusion
+
+R has a litany of tools to conduct time series analysis and forecasting. I have presented the basic set of functions and their implementations to create a VAR and ARIMA model. Before moving forward in creating your models and forecasts, I suggest reading the resources I have linked. Happy forecasting!
+
+## Other resources:
+| (A Deep Dive on Vector Autoregression in R)[https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06]
+| (Use geom_rect() to add recession bars to your time series plots)[https://www.r-bloggers.com/2011/08/use-geom_rect-to-add-recession-bars-to-your-time-series-plots-rstats-ggplot/]
+| (Autoplot Methods)[https://cran.r-project.org/web/packages/ggspectra/vignettes/userguide2-autoplot-methods.html]
+| (Forecast Package Vignette)[https://cran.r-project.org/web/packages/forecast/forecast.pdf]
+| (More on Statistical Tests)[https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b]
+
 
