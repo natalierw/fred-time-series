@@ -1,0 +1,329 @@
+---
+title: "Oregon Employment Forecast"
+author: "Natalie Walker"
+date: "5/23/2022"
+output: html_document
+---
+# NOTES: try subsetting data to before pandemic and then forecasting over pandemic??
+# try to just saying there is serially correlation 
+
+# Introduction
+# loading in data from fred with api key
+# Conducting a unit root test
+# Finding p and q that minimize AIC or SIC
+# Choose test period and running ARIMA and VAR over test period
+# Conducting Diebold-marino test on accuracy of forecasts
+# Forecast out to June 2023
+# Compare monthly employment additions
+```{r}
+knitr::opts_chunk$set(
+  echo = TRUE, ## Show all R output
+  cache = FALSE, ## Cache the results to increase performance.
+  message = FALSE, ## Suppress messages (e.g. about namespace conflicts)
+  warning = FALSE ## Suppress warnings
+  ) 
+knitr::opts_chunk$set(cache=TRUE) 
+```
+
+```{r libs, cache=FALSE}
+## Install the pacman package if necessary
+if (!require("pacman")) install.packages("pacman")
+## Install other packages using pacman::p_load()
+pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
+```
+# Load in the data
+| - Obtain an API key through (FRED)[https://fred.stlouisfed.org/docs/api/api_key.html].
+| - Set your API key in your .Renviron by calling `usethis::edit_r_environ()` and then adding FRED_API_KEY="your-api-key"
+| - Call `readRenviron("~/.Renviron")` or restart your R session to activate the API key
+| - Alternatively, call `fredr_set_key("your-api-key")`, but this will only set it for your current session
+| - Use fredr package to dictate which series you would like to load in. Today, we will use the series ORNA along with CPI, ORUR, and FEDFUNDS.
+```{r}
+# load in data with fredr
+# load in ORNA series
+orna = fredr(
+  series_id = "ORNA",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
+)
+
+# load in CPI series
+cpi = fredr(
+  series_id = "CPILFESL",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
+)
+
+# load in ORUR series
+orur = fredr(
+  series_id = "ORUR",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
+)
+
+# load in FEDFUNDS series
+fedfunds = fredr(
+  series_id = "FEDFUNDS",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2022-04-01")
+)
+
+# load in oregone GDP series
+orgdp = fredr(
+  series_id = "ORNGSP"
+)
+```
+# Examine the series
+| It is helpful to be able to understand how these series move across time and compare their movements relative to each other. For example, during the 2008 recession unemployment rate in Oregon spikes while the Federal funds rate plummets. I used `ggplot2` to create the graphs and the `ggarrange` function in the `ggpubr` package to show a panel of the graphs. 
+| Here, I am also looking for evidence that the any of the series should be logged or contain a unit root. 
+```{r}
+min <- as.Date("1990-01-01")
+max <- as.Date("2022-04-01")
+g_orna = ggplot(data = orna) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "Employees (000s)", x= "Time", title = "Oregon Employment Levels", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+ geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
+
+g_fed = ggplot(data = fedfunds ) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "Interest Rate (%)", x= "Time", title = "Federal Funds Rate", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+ geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
+
+g_unemp = ggplot(data = orur) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "Unemployment Rate (%)", x= "Time", title = "Oregon's Unemployment Rate", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+ geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
+
+g_cpi = ggplot(data = cpi) + 
+  geom_line(aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "CPI Value", x= "Time", title = "Core Consumer Price Index", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+ geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
+
+ggarrange(g_orna, g_unemp, g_cpi, g_fed)
+```
+The CPI and unemployment rate should be logged because we are more interested in changes of the series rather the actual level of the series once they are incorporated into the VAR model. Additionally, it appears that the ORNA series contains a unit root, meaning that a shock to the series is persistent for multiple periods. This is important when choosing between using an ARMA or an ARIMA model.
+# Transform series
+| - Create dataframes with just the date and value for each series
+| - Transform all series so that R recognizes them as timeseries objects using `ts()`
+| - Core CPI and Oregon's unemployment rate should be logged to smooth the series out. 
+| - Use an augmented Dickey-Fuller test (`ur.df`) from the `urca` package to test the degree of integration in the ORNA series in order to construct the correct ARIMA model. The series appears to be on a trend with a unit root however we can test this by using `type = c("trend", "none")` andd compare the significant of the DF statistic. I will also examine the number of lags to include using `selectlags = c("AIC", "BIC")` to determine the degree of cointegration.
+```{r}
+# create an orna time series object
+orna = orna |>
+  subset(select = c(date, value)) # select only necessary variables
+
+orna = ts(orna[,2], # select the value column
+          start = c(1990,1),  # set start of the series January 2000
+          end = c(2022,4 ),
+          frequency = 12) # data is released every month
+
+# create an cpi time series object
+cpi = cpi |>
+  subset(select = c(date, value)) # select only necessary variables
+
+cpi = ts(cpi[,2], # select the value column
+          start = c(1997,1),  # set start of the series January 2000
+         end = c(2022, 4 ),
+          frequency = 12) # data is released every month
+
+# create an fedfunds time series object
+fedfunds = fedfunds |>
+  subset(select = c(date, value)) # select only necessary variables
+
+fedfunds = ts(fedfunds[,2], # select the value column
+          start = c(1990,1),  # set start of the series January 2000
+          end = c(2020, 1 ),
+          frequency = 12) # data is released every month
+ndiffs(fedfunds)
+# create an orur time series object
+orur  = orur |>
+  subset(select = c(date, value)) # select only necessary variables
+
+orur = ts(orur[,2], # select the value column
+          start = c(1990,1),  # set start of the series January 2000
+          end = c(2022, 4),
+          frequency = 12) # data is released every month
+# create an orgdp time series object
+orgdp  = orgdp |>
+  subset(select = c(date, value)) # select only necessary variables
+
+orgdp = ts(orgdp[,2], # select the value column
+          start = 1997,  # set start of the series January 2000
+          end = 2021,
+          frequency = 12) # data is released every month
+
+```
+
+```{r}
+###DELETE####################
+trend_df_aic = ur.df(orna, type = "trend", selectlags = "AIC")
+trend_df_bic = ur.df(orna$value, type = "trend", selectlags = "BIC")
+
+none_df_aic = ur.df(orna$value, type = "none", selectlags = "AIC")
+none_df_bic = ur.df(orna$value, type = "none", selectlags = "BIC")
+
+summary(trend_df_aic)
+summary(trend_df_bic)
+
+summary(none_df_aic)
+summary(none_df_bic)
+
+ndiffs(orna)
+##############################
+adf.test(orna) # non-stationary
+adf.test(orur) # non-stationary
+adf.test(fedfunds) # stationaryx
+adf.test(cpi) # non-stationary
+adf.test(orgdp) #non stationary
+
+diff_orna = diff(orna)
+diff_orur = diff(orur)
+diff_cpi = diff(cpi)
+diff_orgdp = diff(orgdp)
+ln_orgdp = log(orgdp)
+ln_orur = log(orur)
+ln_cpi = log(cpi)
+adf.test(ln_orur)
+diff_ln_orur = diff(ln_orur)
+diff_ln_cpi = diff(ln_cpi)
+diff_ln_orgdp = diff(ln_orgdp)
+adf.test(ln_cpi)
+adf.test(diff_ln_cpi)
+adf.test(diff_ln_orur) # stationary
+adf.test(diff_orna) # stationary
+ndiffs(orna, test = 'adf') # good enough to use one degree of cointegration
+ndiffs(ln_orgdp, test = 'adf')
+ndiffs(ln_orur, test = 'adf')
+ndiffs(cpi, test = 'adf')
+adf.test(diff_orur) # stationary
+adf.test(diff_cpi)
+adf.test(ln_orgdp)
+adf.test(diff_orgdp)
+adf.test(diff_ln_orgdp) # stationary
+```
+| Examining the series it appears to be cointegrated on a trend and the p-value for the lag including the trend is more significant. The ORNA series appears to be on a trend with a unit-root, evidenced by the increasing employment level with temporary drops that set the trend on a lower trajectory (see the trend after 2008).
+| To correct for the non-stationarity, I will take the first-difference according to the `ndiffs()` function.
+```{r}
+
+###########TESTING################
+# this shows us that the series has autocorrelation
+Box.test(orna, lag = 10, type = "Ljung-Box")
+
+orna |> diff() |> ggtsdisplay(main="")
+
+arima = auto.arima(orna1, d = 1)
+checkresiduals(arima)
+
+arimafst = forecast(arima012, h = 24)
+summary(arimafst)
+autoplot(arimafst)
+
+## VAR model 
+# create data frame with our four time series variables 
+comb = cbind(diff_orna, diff_ln_orur)
+colnames(comb) = cbind("or_emp", "or_unemp")
+comb = na.remove(comb)
+
+lagselect = VARselect(comb, lag.max = 10, type = "trend")
+lagselect$selection
+
+model2 = VAR(comb, p = 10, season = NULL, type = "trend", exog = NULL)
+summary(model2)
+
+Serial1 <- serial.test(model2, lags.pt = 10, type = "BG")
+serial.test(model2,lags.pt = 6, type = "PT.asymptotic")
+Serial1 # what to do if they are serially correlated??????
+checkresiduals(model2)
+ alibrary(stargazer)
+stargazer(model2[["varresult"]], type ="text")
+
+# stable model for 2
+roots(model2)
+
+Stability1 <- stability(model2, type = "OLS-CUSUM")
+plot(Stability1)
+
+varfst = forecast(model2, h = 36)
+autoplot(varfst)
+x = as.data.frame(varfst[["forecast"]][["or_emp"]])
+x = x |>
+  mutate(forecast_lvl = cumsum(`Point Forecast`))
+date_ls = c(as.Date("2022-05-01"),as.Date("2022-06-01"), as.Date("2022-07-01"),
+            as.Date("2022-08-01"), as.Date("2022-09-01"), as.Date("2022-10-01"),
+            as.Date("2022-11-01"), as.Date("2022-12-01"), as.Date("2023-01-01"),
+            as.Date("2023-02-01"), as.Date("2023-03-01"), as.Date("2022-04-01"),
+            as.Date("2023-05-01"),as.Date("2023-06-01"), as.Date("2023-07-01"),
+            as.Date("2023-08-01"), as.Date("2023-09-01"), as.Date("2023-10-01"),
+            as.Date("2023-11-01"), as.Date("2023-12-01"), as.Date("2024-01-01"))
+forecast_ls = as.data.frame(x$forecast_lvl)
+forecast_ls = forecast_ls[-c(1:15),]
+or_emp_fore = cbind(date_ls, forecast_ls)
+or_emp_fore = as.data.frame(or_emp_fore)
+or_emp_fore |> 
+  mutate(date = as.Date(date_ls))
+
+min <- as.Date("1990-01-01")
+max <- as.Date("2022-04-01")
+g_orna = ggplot() + 
+  geom_line(data = orna, aes(x = date, y = value)) + 
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y", limits=c(min,max)) +
+  labs(y = "Employees (000s)", x= "Time", title = "Oregon Employment Levels", subtitle = "January 1990 - April 2022") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+ geom_vline(xintercept = as.Date("2020-03-13"), linetype =  "dotted", color = "red")
+g_orna + ggplot() + geom_line(data = x, aes())
+
+empfst_lvl <- cumsum(x$`Point Forecast`)
+autoplot(varfst[["forecast"]][["or_emp"]])
+
+
+```
+
+```{r}
+# use this method: https://www.r-bloggers.com/2021/11/vector-autoregressive-model-var-using-r/
+## VAR model 
+# create data frame with our four time series variables 
+comb = cbind(diff_orna, diff_orur, fedfunds, cpi)
+colnames(comb) = cbind("or_emp", "or_unemp", "fedfunds", "cpi")
+comb = na.remove(comb)
+# lag length
+VARselect(comb, lag.max = 4, type = "trend", season = 4)
+# estimation
+vare_diff = VAR(comb, p = 1, 
+                 type = "trend", season = 4)
+# forecast
+nhor = 24
+varf_diff = predict(vare_diff, n.ahead = nhor)
+#x11(); par(mai=rep(0.4,4)); plot(varf_diff)
+#x11(); par(mai=rep(0.4,4)); fanchart(varf_diff)
+
+# recover lev forecast
+df_lvl = cbind(orna, orur, fedfunds, cpi)
+colnames(df_lvl) = cbind("or_emp", "or_unemp", "fedfunds", "cpi")
+
+m.lev = as.matrix(df_lvl)
+m.varf_lev_ft = rbind(m.lev, matrix(NA, nhor, 4))
+m.ft_df = do.call(cbind,lapply(varf_diff$fcst, function(x) x[,"fcst"]))
+
+str.main = c(
+    "Oregon Employment", "Oregon Unemployment", 
+    "Federal Funds Rate", "CPI")
+
+# Draw Graph
+x11(width=8, height = 8); 
+par(mfrow=c(4,1), mar=c(2,2,2,2))
+ 
+for(i in 1:4) {
+    df = m.varf_lev_ft[,i]
+    matplot(df, type=c("l"), col = c("blue"), 
+            main = str.main[i]) 
+    abline(v=nr_lev, col="blue")
+}
+
+```
