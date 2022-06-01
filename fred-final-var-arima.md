@@ -5,8 +5,8 @@ for this post but understand that these models and subsequent
 forecasting includes complexities that you should grasp before making
 decisions based on the results of these models. You can read about the
 art of forecasting, including a lot more math,
-(here)\[<https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf>\]
-and (here)\[<https://otexts.com/fpp2/VAR.html>\]. Special thanks to
+[here](https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf)
+and [here](https://otexts.com/fpp2/VAR.html). Special thanks to
 Professor Timothy Duy for showing me some of these resources and
 providing the foundation for this example.
 
@@ -21,21 +21,23 @@ providing the foundation for this example.
 
 ### Load in data
 
-\- You will need to obtain an API key through
-(FRED)\[<https://fred.stlouisfed.org/docs/api/api_key.html>\].  
-- Set your API key in your .Renviron by calling
-`usethis::edit_r_environ()` and then adding
-FRED\_API\_KEY=“your-api-key”  
-- Call `readRenviron("~/.Renviron")` or restart your R session to
-activate the API key  
-- Alternatively, call `fredr_set_key("your-api-key")`, but this will
-only set it for your current session  
-- Use `fredr` package to dictate which series you would like to load in.
-Today, we will use the series for temporary employees and overall
-employment in the United States.  
-**Note: I am choosing to load in the data for 1990 to the most recent
-data. We can choose a subset of this to estimate our model over and then
-forecast over “known” periods.**
+-   You will need to obtain an API key through
+    [FRED](https://fred.stlouisfed.org/docs/api/api_key.html).
+-   Set your API key in your .Renviron by calling
+    `usethis::edit_r_environ()` and then adding
+    FRED\_API\_KEY=“your-api-key”
+-   Call `readRenviron("~/.Renviron")` or restart your R session to
+    activate the API key
+-   Alternatively, call `fredr_set_key("your-api-key")`, but this will
+    only set it for your current session
+-   Use `fredr` package to dictate which series you would like to load
+    in. Today, we will use the series for temporary employees and
+    overall employment in the United States. **Note: I am choosing to
+    load in the data for 1990 to the most recent data. We can choose a
+    subset of this to estimate our model over and then forecast over
+    “known” periods.**
+
+<!-- -->
 
     # load in data with fredr
     # overall employment
@@ -61,19 +63,22 @@ forecast over “known” periods.**
 
 ### Create `ts` objects
 
-\- To be able to create ARIMA and VAR models, R has to recognize these
-series as time series objects. We use the `ts()` function that is part
-of the `stats` packge to do this.  
-- I think creating a new data frame from the original FRED data frame
-that we created in the previous make modifying the date ranges for your
-models easier, if need be. I have created `emp1` and will turn `emp1`
-into a ts object by setting the start and end dates mannually because I
-do not want estimate my VAR model over the entire series length. If you
-did not set start and end, then `ts()` defaults to the whole series.  
-- Setting `frequency` should be specified. This is monthly data so I
-have set it to 12.  
-- I am estimating the VAR model over the period January 1990 to December
-2017 for simplicity in this example.
+-   To be able to create ARIMA and VAR models, R has to recognize these
+    series as time series objects. We use the `ts()` function that is
+    part of the `stats` packge to do this.
+-   I think creating a new data frame from the original FRED data frame
+    that we created in the previous make modifying the date ranges for
+    your models easier, if need be. I have created `emp1` and will turn
+    `emp1` into a ts object by setting the start and end dates mannually
+    because I do not want estimate my VAR model over the entire series
+    length. If you did not set start and end, then `ts()` defaults to
+    the whole series.
+-   Setting `frequency` should be specified. This is monthly data so I
+    have set it to 12.
+-   I am estimating the VAR model over the period January 1990 to
+    December 2017 for simplicity in this example.
+
+<!-- -->
 
     # create an overall employment time series object
     emp1 = emp |>
@@ -95,9 +100,11 @@ have set it to 12.
 
 ### Examine series
 
-\- A necessary part of forecasting and creating AR models is to examine
-the series of interest. Today, I will compare the built-in functionality
-of `autoplot` with `ggplot`
+-   A necessary part of forecasting and creating AR models is to examine
+    the series of interest. Today, I will compare the built-in
+    functionality of `autoplot` with `ggplot2`
+
+<!-- -->
 
     # autoplot ONLY USE WITH TS OBJECTS
     autoplot(emp1)
@@ -108,7 +115,7 @@ of `autoplot` with `ggplot`
 
 ![](fred-final-var-arima_files/figure-markdown_strict/unnamed-chunk-4-2.png)
 
-Those graphs are okay… but let’s up the ante a bit with `ggplto2`.
+Those graphs are okay… but let’s up the ante a bit with `ggplot2`.
 
     # ggplot version USE ORIGINAL DATAFRAME
 
@@ -152,22 +159,24 @@ employment could be a signal that a recession is arriving.
 
 # Test for unit root and transform
 
-An important part of understanding the dynamics of a time series is
-knowing whether or not it has a unit root (sometimes referred to as
-cointegration). I suggest you read the chapter dedicated to unit roots
-in the book I linked or here’s a (brief
-intro)\[<https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf>\].  
-I will use an Augmented Dickey-Fuller test to determine the level of
-cointegration coupled with the `ndiffs()` function that automatically
-shows you the level of cointegration in the series. The null hypothesis
-for the ADF test is that non-stationarity exists, i.e. the series has a
-unit root.  
-The `diff()` can be implemented to eliminate the unit root.  
-Then, I perform another ADF test on the first-differenced data. Overall
-employment still shows non-stationarity, as evidenced by accepting the
-null hypothesis.  
-Additionally, I wanted to examine the degree of autocorrelation in the
-differenced series using the Ljung–Box test.
+-   An important part of understanding the dynamics of a time series is
+    knowing whether or not it has a unit root (sometimes referred to as
+    cointegration). I suggest you read the chapter dedicated to unit
+    roots in the book I linked or here’s a [brief
+    intro](https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf).
+-   I will use an Augmented Dickey-Fuller test to determine the level of
+    cointegration coupled with the `ndiffs()` function that
+    automatically shows you the level of cointegration in the series.
+    The null hypothesis for the ADF test is that non-stationarity
+    exists, i.e. the series has a unit root.
+-   The `diff()` can be implemented to eliminate the unit root.
+-   Then, I perform another ADF test on the first-differenced data.
+    Overall employment still shows non-stationarity, as evidenced by
+    accepting the null hypothesis.
+-   Additionally, I wanted to examine the degree of autocorrelation in
+    the differenced series using the Ljung–Box test.
+
+<!-- -->
 
     # augmented dickey-fuller cointegration test
     ndiffs(temphelp1, test = 'adf')
@@ -220,21 +229,24 @@ differenced series using the Ljung–Box test.
 
 ### Select number of lags and estimate model
 
-Here, I will use the TEMPHELPS and PAYEMS in levels rather than the
-differenced data. You can run VAR and ARIMA models using differenced
-data but you have to return it to levels after forecasting for any
-interpretability. Here’s a (good
-resource)\[<https://www.r-bloggers.com/2021/11/vector-autoregressive-model-var-using-r/>\]
-on how to do that.  
-You have to create a matrix of the time series objects to run the lag
-selection procedure and model estimation.  
-There are many ways of selecting the number of lags in a model,
-including just looking at the ACF and PACF, but here I will choose
-whatever the AIC selects from the `VARselect()` function in the `vars`
-package. I specify that the selection and model estimation should be on
-a “trend” because both temporary and overall employment are increasing
-on a trend.  
-Then, I estimate the model using `VAR()`, also in the `vars` package.
+-   Here, I will use the TEMPHELPS and PAYEMS in levels rather than the
+    differenced data. You can run VAR and ARIMA models using differenced
+    data but you have to return it to levels after forecasting for any
+    interpretability. Here’s a [good
+    resource](https://www.r-bloggers.com/2021/11/vector-autoregressive-model-var-using-r/)
+    on how to do that.
+-   You have to create a matrix of the time series objects to run the
+    lag selection procedure and model estimation.
+-   There are many ways of selecting the number of lags in a model,
+    including just looking at the ACF and PACF, but here I will choose
+    whatever the AIC selects from the `VARselect()` function in the
+    `vars` package. I specify that the selection and model estimation
+    should be on a “trend” because both temporary and overall employment
+    are increasing on a trend.
+-   Then, I estimate the model using `VAR()`, also in the `vars`
+    package.
+
+<!-- -->
 
     # create one dataframe with both series to estimate models on
     temp_emp = cbind(emp1, temphelp1)
@@ -339,18 +351,20 @@ Then, I estimate the model using `VAR()`, also in the `vars` package.
 
 ### Statistical checks on the model
 
-Run a Breush-Godfrey test to ensure that we have eliminated any
-autocorrelation in the residuals. In this case, we accept the null
-hypothesis of no serial correlation because the p-value &gt; 0.05  
-Ensure that the model is stable (again, go read about this if you are
-unsure). I plotted the results from the stability test as well as used
-the `roots()` function from `vars`. It appears that our model is not
-stable. This is not good, but I will continue forward for this
-example.  
-The Jacques-Bera test shows whether or not the residuals come from a
-normal distribution. In this case we reject the null hypothesis of
-noraml distribution – not the end of the world but has some
-consequences.
+-   Run a Breush-Godfrey test to ensure that we have eliminated any
+    autocorrelation in the residuals. In this case, we accept the null
+    hypothesis of no serial correlation because the p-value > 0.05
+-   Ensure that the model is stable (again, go read about this if you
+    are unsure). I plotted the results from the stability test as well
+    as used the `roots()` function from `vars`. It appears that our
+    model is not stable. This is not good, but I will continue forward
+    for this example.
+-   The Jacques-Bera test shows whether or not the residuals come from a
+    normal distribution. In this case we reject the null hypothesis of
+    noraml distribution – not the end of the world but has some
+    consequences.
+
+<!-- -->
 
     # ensure no time dependence in residuals
     serial.test(mod1, lags.pt = 8, type = "BG")
@@ -400,15 +414,17 @@ consequences.
 
 ### Granger causality
 
-Granger causality basically tells us which variable contains information
-about the other variable with time as dimension. This type of test (an
-F-test) can be very useful in policymaking because you can use one
-variable as a ‘signal’ for another variable.  
-The `causality()` function in `vars` does this for us. X causes Y if the
-p-value &lt; 0.05  
-In our case, overal employment Granger causes temporary employment, and
-temporary employment Granger causes overall employment over our model
-time period (1990-2017)
+-   Granger causality basically tells us which variable contains
+    information about the other variable with time as dimension. This
+    type of test (an F-test) can be very useful in policymaking because
+    you can use one variable as a ‘signal’ for another variable.
+-   The `causality()` function in `vars` does this for us. X causes Y if
+    the p-value &lt; 0.05
+-   In our case, overal employment Granger causes temporary employment,
+    and temporary employment Granger causes overall employment over our
+    model time period (1990-2017)
+
+<!-- -->
 
     # use  model to understand Granger Causality
     causality(mod1, cause = "emp1")
@@ -447,11 +463,13 @@ time period (1990-2017)
 
 ### Impulse response functions
 
-We should also look at the impulse response functions to better
-understand the degree of impact that a shock to one variable has on the
-other.  
-I chose `n.ahed = 24` to look at the dynamics of a shock 2 years after
-it hits
+-   We should also look at the impulse response functions to better
+    understand the degree of impact that a shock to one variable has on
+    the other.
+-   I chose `n.ahed = 24` to look at the dynamics of a shock 2 years
+    after it hits
+
+<!-- -->
 
     a = irf(mod1, impulse = "emp1", response = "emp1", n.ahead = 24, boot = TRUE)
     plot(a, ylab = "Employment", main = "EMP's shock to EMP")
@@ -481,15 +499,18 @@ temporary hires signals that overall employment will be shocked as well.
 
 ### Forecast
 
-Use the `forecast()` function on the model created in the previous step
-and set your forecast horizon. Here I set the horizon to `h=52` because
-I want to forecast out to April 2022.  
-I use `autoplot()` here for simplicity. Examine the object that the
-`forecast()` function creates – it is a list so you have to use
-“\[\[\]\]” notation to extract the relevant information.  
-To compare the forecasted values with the actual series, I have created
-new series called `temphelp2` and `emp2` that contain data up to April
-2022. Then, I add them to the graph by using `autolayer()`
+-   Use the `forecast()` function on the model created in the previous
+    step and set your forecast horizon. Here I set the horizon to `h=52`
+    because I want to forecast out to April 2022.
+-   I use `autoplot()` here for simplicity. Examine the object that the
+    `forecast()` function creates – it is a list so you have to use
+    “\[\[\]\]” notation to extract the relevant information.
+-   To compare the forecasted values with the actual series, I have
+    created new series called `temphelp2` and `emp2` that contain data
+    up to April 2022. Then, I add them to the graph by using
+    `autolayer()`
+
+<!-- -->
 
     varfst = forecast(mod1, h = 52)
     autoplot(varfst)
@@ -553,13 +574,15 @@ June 2022 to April 2024, I use all the data loaded to run my model.
 
 ### Check unit roots
 
-The “I” in ARIMA stands for “integrated” so the whole point of creating
-an ARIMA model is to leverage the unit root of the data in the creation
-of the forecast.  
- To check for a unit root, I follow the same procedure as above:
-`ndiffs()` with an ADF test.  
-Then, I examine the autocorrelation in the first-differenced data and
-plot the first-differenced data using `ggtdisplay()`
+-   The “I” in ARIMA stands for “integrated” so the whole point of
+    creating an ARIMA model is to leverage the unit root of the data in
+    the creation of the forecast.
+-   To check for a unit root, I follow the same procedure as above:
+    `ndiffs()` with an ADF test.
+-   Then, I examine the autocorrelation in the first-differenced data
+    and plot the first-differenced data using `ggtdisplay()`
+
+<!-- -->
 
     ndiffs(orna1, test = "adf")
 
@@ -584,14 +607,16 @@ dynamics during the pandemic but because it is not highly statistically
 significant, we will stick to using the first-differenced data, rather
 than using two lags. ### Create an ARIMA model
 
-The `forecast` packages comes with an easy function `auto.arima()`.
-There is a manual ARIMA function: `Arima()` if you want to set your own
-(p,d,q) – it is also part of the `forecast` package.  
-With `auto.arima()`, you set the level of cointegration using `d = 1`.
-`auto.arima()` chose an ARIMA(0,1,2) model based on the model that
-minimized the AIC criteria.  
-Then, I check the residuals for autocorrelation and whether the
-residuals come from a normal distribution.
+-   The `forecast` packages comes with an easy function `auto.arima()`.
+    There is a manual ARIMA function: `Arima()` if you want to set your
+    own (p,d,q) – it is also part of the `forecast` package.
+-   With `auto.arima()`, you set the level of cointegration using
+    `d = 1`. `auto.arima()` chose an ARIMA(0,1,2) model based on the
+    model that minimized the AIC criteria.
+-   Then, I check the residuals for autocorrelation and whether the
+    residuals come from a normal distribution.
+
+<!-- -->
 
     arima = auto.arima(orna1, d = 1)
     checkresiduals(arima)
@@ -619,6 +644,7 @@ I use `autoplot()` for simplicity again.
     autoplot(arimafst)
 
 ![](fred-final-var-arima_files/figure-markdown_strict/unnamed-chunk-17-1.png)
+
 # Conclusion
 
 R has a litany of tools to conduct time series analysis and forecasting.
@@ -629,13 +655,13 @@ Happy forecasting!
 
 ## Other resources:
 
-(A Deep Dive on Vector Autoregression in
-R)\[<https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06>\]  
-(Use geom\_rect() to add recession bars to your time series
-plots)\[<https://www.r-bloggers.com/2011/08/use-geom_rect-to-add-recession-bars-to-your-time-series-plots-rstats-ggplot/>\]  
-(Autoplot
-Methods)\[<https://cran.r-project.org/web/packages/ggspectra/vignettes/userguide2-autoplot-methods.html>\]  
-(Forecast Package
-Vignette)\[<https://cran.r-project.org/web/packages/forecast/forecast.pdf>\]  
-(More on Statistical
-Tests)\[<https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b>\]
+[A Deep Dive on Vector Autoregression in
+R](https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06)  
+[Use geom\_rect() to add recession bars to your time series
+plots](https://www.r-bloggers.com/2011/08/use-geom_rect-to-add-recession-bars-to-your-time-series-plots-rstats-ggplot/)  
+[Autoplot
+Methods](https://cran.r-project.org/web/packages/ggspectra/vignettes/userguide2-autoplot-methods.html)  
+[Forecast Package
+Vignette](https://cran.r-project.org/web/packages/forecast/forecast.pdf)  
+[More on Statistical
+Tests](https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b)
