@@ -1,3 +1,5 @@
+# VAR & ARIMA Modeling and Forecasting
+
 In this post, I show the basic steps in R for creating Vector
 Autoregressive (VAR) and Autoregressive Integrated Moving Average
 (ARIMA) models, and forecasting those models. I will skip over the math
@@ -157,7 +159,7 @@ Temporary employment peaks before a recession while overall employment
 peaks during a recession which indicates that a decrease in temporary
 employment could be a signal that a recession is arriving.
 
-# Test for unit root and transform
+### Test for unit root and transform
 
 -   An important part of understanding the dynamics of a time series is
     knowing whether or not it has a unit root (sometimes referred to as

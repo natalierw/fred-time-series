@@ -6,6 +6,7 @@ output:
   md_document: default
   html_document: default
 ---
+# VAR & ARIMA Modeling and Forecasting
 | In this post, I show the basic steps in R for creating Vector Autoregressive (VAR) and Autoregressive Integrated Moving Average (ARIMA) models, and forecasting those models. I will skip over the math for this post but understand that these models and subsequent forecasting includes complexities that you should grasp before making decisions based on the results of these models. You can read about the art of forecasting, including a lot more math, [here](https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf) and [here](https://otexts.com/fpp2/VAR.html). Special thanks to Professor Timothy Duy for showing me some of these resources and providing the foundation for this example.
 
 ```{r, include = FALSE}
@@ -28,6 +29,7 @@ pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
 ```
 
 ### Load in data
+
 - You will need to obtain an API key through [FRED](https://fred.stlouisfed.org/docs/api/api_key.html).
 - Set your API key in your .Renviron by calling `usethis::edit_r_environ()` and then adding FRED_API_KEY="your-api-key"
 - Call `readRenviron("~/.Renviron")` or restart your R session to activate the API key
@@ -84,6 +86,7 @@ temphelp1 = ts(temphelp1[,2], # select the value column
           end = c(2017,12),
           frequency = 12) # data is released every month
 ```
+
 ### Examine series
 
 - A necessary part of forecasting and creating AR models is to examine the series of interest. Today, I will compare the built-in functionality of `autoplot` with `ggplot2`
@@ -135,7 +138,7 @@ ggarrange(g_emp, g_temp)
 
 Temporary employment peaks before a recession while overall employment peaks during a recession which indicates that a decrease in temporary employment could be a signal that a recession is arriving. 
 
-# Test for unit root and transform
+### Test for unit root and transform
 
 - An important part of understanding the dynamics of a time series is knowing whether or not it has a unit root (sometimes referred to as cointegration). I suggest you read the chapter dedicated to unit roots in the book I linked or here's a [brief intro](https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf). 
 - I will use an Augmented Dickey-Fuller test to determine the level of cointegration coupled with the `ndiffs()` function that automatically shows you the level of cointegration in the series. The null hypothesis for the ADF test is that non-stationarity exists, i.e. the series has a unit root. 
