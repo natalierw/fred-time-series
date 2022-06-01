@@ -1,3 +1,5 @@
+# VAR & ARIMA Modeling and Forecasting
+
 In this post, I show the basic steps in R for creating Vector
 Autoregressive (VAR) and Autoregressive Integrated Moving Average
 (ARIMA) models, and forecasting those models. I will skip over the math
@@ -157,7 +159,7 @@ Temporary employment peaks before a recession while overall employment
 peaks during a recession which indicates that a decrease in temporary
 employment could be a signal that a recession is arriving.
 
-# Test for unit root and transform
+### Test for unit root and transform
 
 -   An important part of understanding the dynamics of a time series is
     knowing whether or not it has a unit root (sometimes referred to as
@@ -605,7 +607,9 @@ hypothesis at the 10% level, I decided to look at the ACF and PACF for
 the series which shows some autocorrelation. This is likely due to the
 dynamics during the pandemic but because it is not highly statistically
 significant, we will stick to using the first-differenced data, rather
-than using two lags. ### Create an ARIMA model
+than using two lags.
+
+### Create an ARIMA model
 
 -   The `forecast` packages comes with an easy function `auto.arima()`.
     There is a manual ARIMA function: `Arima()` if you want to set your
@@ -636,9 +640,10 @@ relatively normally distributed.
 
 ### Forecast
 
-Use the `forecast()` function again to forecast out two years of
-employment.  
-I use `autoplot()` for simplicity again.
+-   Use the `forecast()` function again to forecast out two years of
+    employment.
+
+<!-- -->
 
     arimafst = forecast(arima, h = 24)
     autoplot(arimafst)

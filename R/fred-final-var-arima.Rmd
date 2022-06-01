@@ -3,9 +3,12 @@ title: "Basic Forecasting Using VAR and ARIMA Models"
 author: "Natalie Walker"
 date: "5/30/2022"
 output: 
-  md_document: default
   html_document: default
+  md_document: default
 ---
+
+# VAR & ARIMA Modeling and Forecasting
+
 | In this post, I show the basic steps in R for creating Vector Autoregressive (VAR) and Autoregressive Integrated Moving Average (ARIMA) models, and forecasting those models. I will skip over the math for this post but understand that these models and subsequent forecasting includes complexities that you should grasp before making decisions based on the results of these models. You can read about the art of forecasting, including a lot more math, [here](https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf) and [here](https://otexts.com/fpp2/VAR.html). Special thanks to Professor Timothy Duy for showing me some of these resources and providing the foundation for this example.
 
 ```{r, include = FALSE}
@@ -17,6 +20,7 @@ knitr::opts_chunk$set(
   ) 
 knitr::opts_chunk$set(cache=TRUE) 
 ```
+
 # VAR Model & Forecast
 
 ### Load in packages
@@ -28,6 +32,7 @@ pacman::p_load(fredr, dplyr, tseries, ggplot2, ggpubr, forecast, vars)
 ```
 
 ### Load in data
+
 - You will need to obtain an API key through [FRED](https://fred.stlouisfed.org/docs/api/api_key.html).
 - Set your API key in your .Renviron by calling `usethis::edit_r_environ()` and then adding FRED_API_KEY="your-api-key"
 - Call `readRenviron("~/.Renviron")` or restart your R session to activate the API key
@@ -84,6 +89,7 @@ temphelp1 = ts(temphelp1[,2], # select the value column
           end = c(2017,12),
           frequency = 12) # data is released every month
 ```
+
 ### Examine series
 
 - A necessary part of forecasting and creating AR models is to examine the series of interest. Today, I will compare the built-in functionality of `autoplot` with `ggplot2`
@@ -135,7 +141,7 @@ ggarrange(g_emp, g_temp)
 
 Temporary employment peaks before a recession while overall employment peaks during a recession which indicates that a decrease in temporary employment could be a signal that a recession is arriving. 
 
-# Test for unit root and transform
+### Test for unit root and transform
 
 - An important part of understanding the dynamics of a time series is knowing whether or not it has a unit root (sometimes referred to as cointegration). I suggest you read the chapter dedicated to unit roots in the book I linked or here's a [brief intro](https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf). 
 - I will use an Augmented Dickey-Fuller test to determine the level of cointegration coupled with the `ndiffs()` function that automatically shows you the level of cointegration in the series. The null hypothesis for the ADF test is that non-stationarity exists, i.e. the series has a unit root. 
@@ -305,6 +311,7 @@ Box.test(diff(orna1), lag = 10, type = "Ljung-Box")
 orna1 |> diff() |> ggtsdisplay(main="First-Difference of ORNA Series and Autocorrelations")
 ```
 The p-value > 0.05 for the Ljung-Box test shows that the series does not exhibit autocorrelations. However, we could reject the null hypothesis at the 10% level, I decided to look at the ACF and PACF for the series which shows some autocorrelation. This is likely due to the dynamics during the pandemic but because it is not highly statistically significant, we will stick to using the first-differenced data, rather than using two lags. 
+
 ### Create an ARIMA model
 
 - The `forecast` packages comes with an easy function `auto.arima()`. There is a manual ARIMA function: `Arima()` if you want to set your own (p,d,q) -- it is also part of the `forecast` package.
@@ -318,8 +325,8 @@ checkresiduals(arima)
 The residuals do not exhibit autocorrelation and they appear to be relatively normally distributed.
 
 ### Forecast
-| Use the `forecast()` function again to forecast out two years of employment. 
-| I use `autoplot()` for simplicity again. 
+
+- Use the `forecast()` function again to forecast out two years of employment. 
 ```{r}
 arimafst = forecast(arima, h = 24)
 autoplot(arimafst)
@@ -330,6 +337,7 @@ autoplot(arimafst)
 R has a litany of tools to conduct time series analysis and forecasting. I have presented the basic set of functions and their implementations to create a VAR and ARIMA model. Before moving forward in creating your models and forecasts, I suggest reading the resources I have linked. Happy forecasting!
 
 ## Other resources:
+
 | [A Deep Dive on Vector Autoregression in R](https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06)
 | [Use geom_rect() to add recession bars to your time series plots](https://www.r-bloggers.com/2011/08/use-geom_rect-to-add-recession-bars-to-your-time-series-plots-rstats-ggplot/)
 | [Autoplot Methods](https://cran.r-project.org/web/packages/ggspectra/vignettes/userguide2-autoplot-methods.html)
