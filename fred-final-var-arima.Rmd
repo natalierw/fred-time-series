@@ -5,11 +5,8 @@ date: "5/30/2022"
 output: 
   html_document: default
   md_document: default
-
 ---
 | In this post, I show the basic steps in R for creating Vector Autoregressive (VAR) and Autoregressive Integrated Moving Average (ARIMA) models, and forecasting those models. I will skip over the math for this post but understand that these models and subsequent forecasting includes complexities that you should grasp before making decisions based on the results of these models. You can read about the art of forecasting, including a lot more math, (here)[https://www.sas.upenn.edu/~fdiebold/Teaching221/BookPhotocopy.pdf] and (here)[https://otexts.com/fpp2/VAR.html]. Special thanks to Professor Timothy Duy for showing me some of these resources and providing the foundation for this example.
-
-SOURCE: https://towardsdatascience.com/a-deep-dive-on-vector-autoregression-in-r-58767ebb3f06
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
