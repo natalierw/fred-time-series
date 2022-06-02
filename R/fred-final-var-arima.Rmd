@@ -3,8 +3,9 @@ title: "Basic Forecasting Using VAR and ARIMA Models"
 author: "Natalie Walker"
 date: "5/30/2022"
 output: 
-  html_document: default
+  pdf_document: default
   md_document: default
+  html_document: default
 ---
 
 # VAR & ARIMA Modeling and Forecasting
